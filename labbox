@@ -1,0 +1,62 @@
+#!/bin/sh
+# labbox - poor-man's dropbox for Mac. Requires fswatch (brew install fswatch).
+#
+# Variant of "poor-man's dropbox", which originated as a script by Sahir.
+# I evolved it to be better for MacOS. But it is not a full 2-way-sync. It
+# runs on your laptop and detects changed files within a parent directory
+# and all child directories under it (using fswatch) and copies the changed
+# content to the lab machine (using rsync).
+#
+# Any changes you make on the lab machine will *not* show up on your pc,
+# and are subject to being overwritten the next time rsync runs. I.e. if
+# you have files X and Y, and you edit Y on the lab machine, and X on your
+# laptop, updating X will trigger rsync to run, and rsync will see that both
+# X and Y differ, and will overwrite both files. So your Y changes are lost.
+# (However, if you have file Z on the lab machine that does not exist on your
+# laptop, rsync will *not* delete Z.)
+
+
+FILE="$1"
+if [ -z "$FILE" ]; then :
+  echo "Usage: labbox LabDir [rsync_opts]" >&2
+  exit 1
+fi
+
+HOST="orion.29west.com"
+if [ -n "$LABBOX_HOST" ]; then :
+  HOST="$LABBOX_HOST"
+fi
+
+shift  # Get rid of file
+
+RSYNC_OPTS="-a"
+if [ -n "$1" ]; then :
+  RSYNC_OPTS="$1"
+fi
+
+echo "starting initial sync" `date`
+ssh $HOST mkdir -p $FILE >/dev/null 2>&1
+rsync </dev/null $RSYNC_OPTS -zq $* . orion.29west.com:$FILE
+echo "done" `date`
+
+# Use poll_monitor because vi usually does two changes per write and
+# there is a certain unpredictability in them.  With poll_monitor, you
+# always get exactly one "Updated" per vi write.
+export TMOUT=
+fswatch -l.5 -mpoll_monitor -r -x . |
+  while true; do :
+    read ILINE
+    if [ $? -eq 0 ]; then :
+      # read successful; empty the pipe until timeout.
+      echo "read (`date`): $ILINE"
+      export TMOUT=1
+    else :
+      # Got timeout (read failed); do rsync.
+      export TMOUT=       # block next read until fswatch speaks again.
+      echo "rsync '$FILE' (`date`)"
+      rsync </dev/null $RSYNC_OPTS -zq . orion.29west.com:$FILE
+      echo "ssh sync (`date`)"
+      ssh </dev/null orion.29west.com sync
+      echo "done (`date`)"
+    fi
+  done
