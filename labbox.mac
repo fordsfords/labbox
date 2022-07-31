@@ -1,5 +1,7 @@
 #!/bin/bash
-# labbox - poor-man's dropbox for Ubuntu.
+# labbox - poor-man's dropbox for Mac. Requires fswatch (brew install fswatch).
+#
+# Project home: https://github.com/fordsfords/labbox
 #
 # License: CC0 (equiv to public domain). Any use, no attribution required.
 
@@ -10,12 +12,10 @@ if [ -z "$FILE" ]; then :
 fi
 shift  # Get rid of file.
 
-HOST="amun.29west.com"
+HOST="nite.29west.com"
 if [ -n "$LABBOX_HOST" ]; then :
   HOST="$LABBOX_HOST"
 fi
-
-trap "exit 1" 1 2 3 15
 
 EXCL='--exclude "*.pcap" --exclude "*.log" --exclude "mac/" --exclude "x" --exclude "x.*" --exclude "*.x" --exclude ".git"'
 if [ -f "labbox.exclude" ]; then :
@@ -25,7 +25,7 @@ if [ -f "labbox.exclude" ]; then :
   done <labbox.exclude
 fi
 
-FSEXCL='--exclude ".*\.pcap$" --exclude ".*/mac/.*" --exclude ".*/mac$" --exclude ".*/x$" --exclude ".*/x\..*" --exclude ".*\.x$" --exclude ".*/\.git.*"'
+FSEXCL='--exclude ".*\.pcap$" --exclude ".*/mac/.*" --exclude ".*/mac$" --exclude ".*/x$" --exclude ".*/x\..*" --exclude ".*\.x$" --exclude ".*/\.git/.*" --exclude ".*/\.git$"'
 if [ -f "labbox.fsexclude" ]; then :
   FSEXCL=""
   while read E; do :
@@ -41,25 +41,35 @@ if [ -n "$LABBOX_OPTS" ]; then :
   OPTS="$LABBOX_OPTS"
 fi
 
-echo "fswatch use: fswatch $FSEXCL -r -x ."
+echo -n -e "\033]0;Init\007"
 echo "starting initial sync $FILE $HOST ($EXCL)" `date`
 ssh $HOST mkdir -p $FILE >/dev/null 2>&1
-echo "rsync $OPTS $EXCL $* . $HOST:$FILE (`date`)"
 eval "rsync </dev/null $OPTS $EXCL $* . $HOST:$FILE"
 echo "done" `date`
 
 # Use poll_monitor because vi usually does two changes per write and
 # there is a certain unpredictability in them.  With poll_monitor, you
 # always get exactly one "Updated" per vi write.
-eval fswatch --event Created --event Updated --event Renamed --event MovedTo $FSEXCL -r -x . | while true; do :
-  # wait for update
-  read ILINE
-  echo "$ILINE"
-  # flush updates
-  while read -t 1 ILINE; do echo "$ILINE"; done
-  echo "rsync $OPTS $EXCL $* . $HOST:$FILE (`date`)"
-  # eval "rsync </dev/null $OPTS $EXCL $* . $HOST:$FILE"
-  # echo "ssh sync (`date`)"
-  # ssh </dev/null $HOST sync
-  echo "done (`date`)"
-done
+echo -n -e "\033]0;Idle\007"
+export TMOUT=
+sh -c "fswatch -l.5 $FSEXCL -mpoll_monitor -r -x ." |
+  while true; do :
+    echo -n -e "\033]0;Idle\007"
+    read ILINE
+    if [ $? -eq 0 ]; then :
+      echo -n -e "\033]0;Read\007"
+      # read successful; empty the pipe until timeout.
+      echo "read (`date`): $ILINE"
+      export TMOUT=1
+    else :
+      # Got timeout (read failed); do rsync.
+      echo -n -e "\033]0;Transfer\007"
+      export TMOUT=       # block next read until fswatch speaks again.
+      echo "rsync '$FILE' $EXCL (`date`)"
+      eval "rsync </dev/null $OPTS $EXCL $* . $HOST:$FILE"
+      echo -n -e "\033]0;Sync\007"
+      echo "ssh sync (`date`)"
+      ssh </dev/null $HOST sync
+      echo "done (`date`)"
+    fi
+  done
