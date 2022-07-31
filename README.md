@@ -26,10 +26,10 @@ laptop, rsync will *not* delete Z.)
 
 # DEPENDENCIES
 
-Requires "fswatch", which is available via https://brew.sh/
-```
-brew install fswatch
-```
+Requires "fswatch", which is available for Mac via
+[brew install fswatch](https://brew.sh/)
+and available for Ubuntu Linux via "apt install fswatch".
+
 # USAGE
 
 ````
