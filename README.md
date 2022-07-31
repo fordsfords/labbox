@@ -1,4 +1,4 @@
-# labbox - shell script for Mac to update a remote host's files.
+# labbox - shell script for Linux and Mac to update a remote host's files.
 
 Project home:
 https://github.com/fordsfords/labbox
@@ -8,7 +8,7 @@ CC0 (equiv to public domain). Any use, no attribution required.
 
 Labbox is a variant of "poor-man's dropbox",
 which originated as a script by Sahir Hoda.
-I evolved it to be better for MacOS.
+I evolved it to be better for Linux and MacOS.
 
 Unlike DropBox, this is not a 2-way-sync.
 It runs on your laptop and detects changed files within a parent directory
@@ -76,8 +76,8 @@ override the default options with a completely different set.
 # EXCLUSIONS
 
 Frequently one does not wish to copy various types of files.
-For example, if I build and test on my Mac, I generally don't want ".o" objects
-and ".log" output files copied to the Linux host.
+For example, if I build and test on my laptop, I generally don't want ".o" objects
+and ".log" output files copied to the remote host.
 Both rsync and fswatch support the "--exclude" option to prevent files
 from being processed.
 
